@@ -27,11 +27,37 @@ class Proxy_Server(BaseHTTPRequestHandler):
 
         #  geting response from Bob
         resp = conn.getresponse()
-        respone_data = resp.read()
-        respone_headers = dict(resp.msg.dict)  # wywalic transfer encoding i dac content len
-        respone_headers.pop('Transfer-Encoding', None)
-        if 'Content-Length' not in respone_headers:
-            respone_headers['Content-Length'] = len(respone_data)
+        respone_data = ''
+        _buff_size = 0
+        while True:
+            _buff_line = resp.read(1)
+            if _buff_line == '':
+                break
+            _buff_size = _buff_size + 1
+            respone_data += _buff_line
+        foo = str(_buff_size)
+        respone_headers = dict(resp.msg.dict)  # wywalic transfer encoding i dac content len, co sie dzieje z kodowaniem?
+        for key in respone_headers:
+            if key.lower() == 'Transfer-Encoding'.lower():
+                respone_headers.pop(key, None)
+                break
+        for key in respone_headers:
+            if key.lower() == 'Connection'.lower():
+                respone_headers.pop(key, None)
+                break
+        respone_headers['Connection'] = 'close'
+
+        found = False
+        for key in respone_headers:
+            if key.lower() == 'Content-Length'.lower():
+                found = True
+                break
+        if not found:
+            respone_headers['Content-Length'] = str(len(respone_data))
+
+
+
+
 
         # replying to Alice
         self.send_response(resp.status)
@@ -59,4 +85,9 @@ if __name__ == "__main__":
 
     logging.basicConfig(filename='log.txt', level=logging.INFO)
     httpd = HTTPServer((HOST_NAME, PORT_NUMBER), Proxy_Server)
-    httpd.serve_forever()
+    while 1:
+        try:
+            httpd.serve_forever()
+        except:
+            pass
+
