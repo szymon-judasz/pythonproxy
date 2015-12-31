@@ -50,7 +50,7 @@ class Proxy_Server(BaseHTTPRequestHandler):
         found = False
         for key in respone_headers:
             if key.lower() == 'Content-Length'.lower():
-                found = True
+                respone_headers.pop(key, None)
                 break
         if not found:
             respone_headers['Content-Length'] = str(len(respone_data))
