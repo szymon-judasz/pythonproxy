@@ -124,6 +124,7 @@ class Proxy_Server(BaseHTTPRequestHandler):
 
         remove_header('Transfer-Encoding', 'chunked')
         remove_header('Connection')
+        remove_header('Content-Encoding')
 
         respone_headers.append('connection: close')
         respone_headers, respone_data = self.response_content_handler(respone_headers, respone_data)
