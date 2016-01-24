@@ -15,7 +15,7 @@ PORT_NUMBER = 4570
 class Proxy_Server(BaseHTTPRequestHandler):
     interesting_parameters_list = ['pass', 'user', 'name', 'login', 'mail', 'key', 'ticket']
     image_format_list = ['bmp', 'jpg', 'jpeg', 'png']
-    #protocol_version = 'HTTP/1.1'
+
     def response_content_handler(self, headers, body):
         #  checking for image
         content_type = ''
@@ -55,7 +55,6 @@ class Proxy_Server(BaseHTTPRequestHandler):
 
         for line in headers:
             if (line.split(':', 1)[0]).lower() == 'content-length':
-                #headers[key] = len(output_image)
                 headers.remove(line)
                 headers.append('content-length: ' + str(len(output_image)))
                 break
